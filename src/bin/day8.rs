@@ -43,7 +43,8 @@ fn main() {
     edges_to_join.sort();
 
     // Join up the circuits
-    let mut circuit = (0..points.len()).collect::<Vec<_>>(); // Everyone is their own circuit.
+    let mut num_circuits = points.len();
+    let mut circuit = (0..num_circuits).collect::<Vec<_>>(); // Everyone is their own circuit.
     let mut edges_to_join = edges_to_join.into_iter();
     for Edge(_, mut a, mut b) in edges_to_join.by_ref().take(capacity) {
         // println!("Joining {x:3?} ({b} -> {a})");
@@ -54,6 +55,9 @@ fn main() {
             b = circuit[b];
         }
         circuit[b] = circuit[a];
+        if a != b {
+            num_circuits -= 1;
+        }
     }
 
     // Flatten the structure for easy counting
@@ -84,28 +88,15 @@ fn main() {
             b = circuit[b];
         }
         circuit[b] = circuit[a];
-
-        // Flatten the structure for easy counting
-        for i in 0..circuit.len() {
-            while circuit[i] != circuit[circuit[i]] {
-                circuit[i] = circuit[circuit[i]];
+        if a != b {
+            num_circuits -= 1;
+            if num_circuits == 1 {
+                println!(
+                    "Part 2: {}",
+                    u64::from(points[old_a].0) * u64::from(points[old_b].0)
+                );
+                break;
             }
-        }
-        // Count the circuit sizes.
-        let mut circuit_size = iter::repeat_n(0u64, points.len()).collect::<Vec<_>>();
-        for &x in &circuit {
-            circuit_size[x] += 1;
-        }
-        circuit_size.sort();
-        if circuit_size
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &x)| (x > 0).then_some(i))
-            .count()
-            == 1
-        {
-            println!("Part 2: {}", u64::from(points[old_a].0) * u64::from(points[old_b].0));
-            break;
         }
     }
 }
