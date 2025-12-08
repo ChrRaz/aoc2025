@@ -23,6 +23,9 @@ macro_rules! dbg_inline {
     ($fmt:literal:$($val:expr),+ $(,)?) => {
         ($($crate::dbg_inline!($fmt:$val)),+,)
     };
+    ($($val:expr),+ $(,)?) => {
+        ($($crate::dbg_inline!("{:?}":$val)),+,)
+    };
 }
 
 /// Returns a BinaryHeap<T> so you can choose whether you need the items in sorted order using BinaryHeap::into_sorted_vec().

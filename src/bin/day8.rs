@@ -74,7 +74,7 @@ fn main() {
     }
     circuit_size.sort();
     let biggest = circuit_size.into_iter().rev().take(3).collect::<Vec<_>>();
-    dbg_inline!("{:?}": &biggest);
+    dbg_inline!(&biggest);
     println!("Part 1: {}", biggest.iter().product::<u64>());
 
     for Edge(_, mut a, mut b) in edges_to_join {
