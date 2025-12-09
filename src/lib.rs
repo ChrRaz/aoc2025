@@ -1,4 +1,4 @@
-use std::collections::BinaryHeap;
+pub mod iter;
 
 #[macro_export]
 macro_rules! dbg_inline {
@@ -26,17 +26,4 @@ macro_rules! dbg_inline {
     ($($val:expr),+ $(,)?) => {
         ($($crate::dbg_inline!("{:?}":$val)),+,)
     };
-}
-
-/// Returns a BinaryHeap<T> so you can choose whether you need the items in sorted order using BinaryHeap::into_sorted_vec().
-/// Otherwise, just use it as an iterator.
-pub fn n_smallest<T: Ord>(mut iter: impl Iterator<Item = T>, n: usize) -> BinaryHeap<T> {
-    // let mut iter = iter.into_iter();
-    let mut heap = BinaryHeap::with_capacity(n + 1);
-    heap.extend(iter.by_ref().take(n));
-    for x in iter {
-        heap.push(x);
-        heap.pop();
-    }
-    heap
 }
