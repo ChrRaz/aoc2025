@@ -16,6 +16,16 @@ pub trait IterExt: Iterator {
         }
         heap
     }
+
+    fn cartesian_product<T, U>(self, other: U) -> impl Iterator<Item = (Self::Item, T)>
+    where
+        Self: Sized,
+        Self::Item: Clone,
+        U: Clone,
+        U: Iterator<Item = T>,
+    {
+        self.flat_map(move |x| other.clone().map(move |y| (x.clone(), y)))
+    }
 }
 
 impl<I: Iterator> IterExt for I {}
