@@ -2,6 +2,7 @@ use aoc25::iter::IterExt;
 use aoc25::sort_two;
 use chumsky::prelude::*;
 use chumsky::text::{int, newline};
+use indicatif::{ProgressFinish, ProgressIterator, ProgressStyle};
 use std::collections::BTreeSet;
 use std::iter::Map;
 use std::ops::Bound::Excluded;
@@ -61,6 +62,14 @@ fn main() {
         .iter()
         .enumerate()
         .flat_map(|(i, &a)| red_tiles[i + 1..].iter().map(move |&b| (a, b)))
+        .progress_count((red_tiles.len() * (red_tiles.len() - 1) / 2) as u64)
+        .with_style(
+            ProgressStyle::with_template(
+                "{bar:40} {pos}/{len} ({per_sec:1}) {elapsed} (ETA:{eta})",
+            )
+            .unwrap(),
+        )
+        .with_finish(ProgressFinish::AndLeave)
         .filter_map(|(x, y)| {
             let point_in_rect = (x.0.midpoint(y.0), x.1.midpoint(y.1));
             let edge = (x.0.midpoint(y.0), 0);
