@@ -2,7 +2,8 @@ use aoc25::iter::IterExt;
 use aoc25::sort_two;
 use chumsky::prelude::*;
 use chumsky::text::{int, newline};
-use indicatif::{ProgressFinish, ProgressIterator, ProgressStyle};
+use indicatif::{ParallelProgressIterator, ProgressFinish, ProgressStyle};
+use rayon::prelude::*;
 use std::collections::BTreeSet;
 use std::iter::Map;
 use std::ops::Bound::Excluded;
@@ -59,9 +60,9 @@ fn main() {
     println!("Part 1: {}", best.area());
 
     let best_part2 = red_tiles
-        .iter()
+        .par_iter()
         .enumerate()
-        .flat_map(|(i, &a)| red_tiles[i + 1..].iter().map(move |&b| (a, b)))
+        .flat_map(|(i, &a)| red_tiles[i + 1..].par_iter().map(move |&b| (a, b)))
         .progress_count((red_tiles.len() * (red_tiles.len() - 1) / 2) as u64)
         .with_style(
             ProgressStyle::with_template(
