@@ -1,3 +1,5 @@
+use std::mem;
+
 pub mod iter;
 
 #[macro_export]
@@ -26,4 +28,10 @@ macro_rules! dbg_inline {
     ($($val:expr),+ $(,)?) => {
         ($($crate::dbg_inline!("{:?}":$val)),+,)
     };
+}
+
+pub fn sort_two<T: Ord>(a: &mut T, b: &mut T) {
+    if a > b {
+        mem::swap(a, b);
+    }
 }
