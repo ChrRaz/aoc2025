@@ -53,7 +53,7 @@ fn main() {
     let best = red_tiles
         .iter()
         .cartesian_product(red_tiles.iter())
-        .map(|(&x, &y)| Rectangle { x, y })
+        .map(|(&a, &b)| Rectangle { a, b })
         .max_by_key(Rectangle::area)
         .unwrap();
     println!("Part 1: {}", best.area());
@@ -70,19 +70,19 @@ fn main() {
             .unwrap(),
         )
         .with_finish(ProgressFinish::AndLeave)
-        .filter_map(|(x, y)| {
-            let point_in_rect = (x.0.midpoint(y.0), x.1.midpoint(y.1));
-            let edge = (x.0.midpoint(y.0), 0);
+        .filter_map(|(a, b)| {
+            let point_in_rect = (a.0.midpoint(b.0), a.1.midpoint(b.1));
+            let edge = (a.0.midpoint(b.0), 0);
             let is_center_inside = green_tiles.range(edge..=point_in_rect).count() % 2 == 1;
             if !is_center_inside {
                 // println!("{x:?} x {y:?}: Not inside");
                 return None;
             }
             // println!("{r:2?} -> {}", Rectangle { x, y }.area());
-            let crossings = (x.1 != y.1) && {
+            let crossings = (a.1 != b.1) && {
                 // Make x and y the upper-left and lower-right corners
-                let mut a = x;
-                let mut b = y;
+                let mut a = a;
+                let mut b = b;
                 sort_two(&mut a.0, &mut b.0);
                 sort_two(&mut a.1, &mut b.1);
                 (a.0 + 1..=b.0 - 1)
@@ -95,7 +95,7 @@ fn main() {
                 return None;
             }
             // println!("{x:?} x {y:?}: All good");
-            Some(Rectangle { x, y })
+            Some(Rectangle { a, b })
         })
         // .inspect(|r| println!("{r:?}"))
         .max_by_key(Rectangle::area)
@@ -106,16 +106,16 @@ fn main() {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Rectangle {
-    x: (usize, usize),
-    y: (usize, usize),
+    a: (usize, usize),
+    b: (usize, usize),
 }
 
 impl Rectangle {
-    pub fn new(x: (usize, usize), y: (usize, usize)) -> Self {
-        Self { x, y }
+    pub fn new(a: (usize, usize), b: (usize, usize)) -> Self {
+        Self { a, b }
     }
 
     pub fn area(&self) -> usize {
-        (self.x.0.abs_diff(self.y.0) + 1) * (self.x.1.abs_diff(self.y.1) + 1)
+        (self.a.0.abs_diff(self.b.0) + 1) * (self.a.1.abs_diff(self.b.1) + 1)
     }
 }
