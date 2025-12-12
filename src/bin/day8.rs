@@ -2,8 +2,9 @@ use aoc25::dbg_inline;
 use chumsky::prelude::*;
 use chumsky::text::{int, newline};
 use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 use std::fmt::{Debug, Formatter};
-use std::{env, io, iter};
+use std::{cmp, env, io, iter};
 
 fn main() {
     // Read the input
@@ -36,16 +37,15 @@ fn main() {
             let points = &points; // rust is being weird about move closures
             (0..a).map(move |b| {
                 // Swap a and b here just so edges go from small to high index
-                Edge::new(points, b, a)
+                cmp::Reverse(Edge::new(points, b, a))
             })
         })
-        .collect::<Vec<_>>();
-    edges_to_join.sort();
+        .collect::<BinaryHeap<_>>();
 
     // Join up the circuits
     let mut num_circuits = points.len();
     let mut circuit = (0..num_circuits).collect::<Vec<_>>(); // Everyone is their own circuit.
-    let mut edges_to_join = edges_to_join.into_iter();
+    let mut edges_to_join = iter::from_fn(|| edges_to_join.pop()).map(|cmp::Reverse(e)| e);
     for Edge(_, mut a, mut b) in edges_to_join.by_ref().take(capacity) {
         // println!("Joining {x:3?} ({b} -> {a})");
         while a != circuit[a] {
