@@ -87,8 +87,8 @@ fn main() {
                 sort_two(&mut a.1, &mut b.1);
                 (a.0 + 1..=b.0 - 1)
                     .flat_map(|x| green_tiles.range((Excluded((x, a.1)), Excluded((x, b.1)))))
-                    .count()
-                    != 0
+                    .next()
+                    .is_some()
             };
             if crossings {
                 // println!("{x:?} x {y:?}: Crosses boundary");
