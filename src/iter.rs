@@ -26,6 +26,36 @@ pub trait IterExt: Iterator {
     {
         self.flat_map(move |x| other.clone().map(move |y| (x.clone(), y)))
     }
+
+    fn pad_end(self, n: usize, value: Self::Item) -> Pad<Self>
+    where
+        Self: Sized,
+    {
+        Pad {
+            iter: Box::new(self),
+            left: n,
+            value,
+        }
+    }
 }
 
 impl<I: Iterator> IterExt for I {}
+
+pub struct Pad<I: Iterator> {
+    iter: Box<I>,
+    left: usize,
+    value: I::Item,
+}
+
+impl<T: Clone, I: Iterator<Item = T>> Iterator for Pad<I> {
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = self.iter.next().or_else(|| match self.left {
+            0 => None,
+            _ => Some(self.value.clone()),
+        });
+        self.left = self.left.saturating_sub(1);
+        next
+    }
+}
