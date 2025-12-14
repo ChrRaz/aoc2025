@@ -57,14 +57,27 @@ fn main() {
 
     let paths = simulate_network(&network, HashMap::from([("you", 1)]), "out", &topo_sort);
     println!("Part 1: {paths}");
+
+    let (first, second) = topo_sort
+        .iter()
+        .find_map(|&id| match id {
+            "dac" => Some(("dac", "fft")),
+            "fft" => Some(("fft", "dac")),
+            _ => None,
+        })
+        .unwrap();
+    let paths = simulate_network(&network, HashMap::from([("svr", 1)]), first, &topo_sort);
+    let paths = simulate_network(&network, HashMap::from([(first, paths)]), second, &topo_sort);
+    let paths = simulate_network(&network, HashMap::from([(second, paths)]), "out", &topo_sort);
+    println!("Part 2: {paths}");
 }
 
 fn simulate_network<'a>(
     network: &HashMap<&str, HashSet<&'a str>>,
-    mut packets: HashMap<&'a str, u32>,
+    mut packets: HashMap<&'a str, u64>,
     end_node: &str,
     topo_sort: &[&str],
-) -> u32 {
+) -> u64 {
     // dbg_inline!(&packets);
     for &x in topo_sort {
         let n_packets = match packets.remove(x) {
