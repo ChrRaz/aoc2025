@@ -22,17 +22,16 @@ fn main() {
 
     let network = parser.parse(&*input).unwrap();
 
-    let mut reverse = network
-        .iter()
-        .fold(HashMap::new(), |mut acc, (&id, edges)| {
-            acc.entry(id).or_insert(HashSet::new());
-            for &x in edges.iter() {
-                acc.entry(x).or_insert(HashSet::new()).insert(id);
-            }
-            acc
-        });
-
-    let topo_sort = {
+    let topo_sort: Vec<_> = {
+        let mut reverse = network
+            .iter()
+            .fold(HashMap::new(), |mut acc, (&id, edges)| {
+                acc.entry(id).or_insert(HashSet::new());
+                for &x in edges.iter() {
+                    acc.entry(x).or_insert(HashSet::new()).insert(id);
+                }
+                acc
+            });
         iter::from_fn(|| {
             if reverse.is_empty() {
                 return None;
@@ -53,19 +52,27 @@ fn main() {
             }
             Some(pred)
         })
+        .collect()
     };
 
-    let mut paths = 0;
+    let paths = simulate_network(&network, HashMap::from([("you", 1)]), "out", &topo_sort);
+    println!("Part 1: {paths}");
+}
 
-    let mut packets = HashMap::from([("you", 1)]);
+fn simulate_network<'a>(
+    network: &HashMap<&str, HashSet<&'a str>>,
+    mut packets: HashMap<&'a str, u32>,
+    end_node: &str,
+    topo_sort: &[&str],
+) -> u32 {
     // dbg_inline!(&packets);
-    for x in topo_sort {
+    for &x in topo_sort {
         let n_packets = match packets.remove(x) {
             None => continue,
             Some(x) => x,
         };
-        if x == "out" {
-            paths += n_packets;
+        if x == end_node {
+            return n_packets;
         } else {
             for &next in &network[x] {
                 *packets.entry(next).or_default() += n_packets;
@@ -73,5 +80,5 @@ fn main() {
         }
         // dbg_inline!(&packets);
     }
-    println!("Part 1: {paths}");
+    unreachable!();
 }
