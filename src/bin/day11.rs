@@ -1,7 +1,8 @@
 use aoc25::read_file_or_stdin;
 use chumsky::prelude::*;
 use chumsky::text::{ident, inline_whitespace, newline};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
+use std::iter;
 
 fn main() {
     let input = read_file_or_stdin();
@@ -20,21 +21,54 @@ fn main() {
     .boxed();
 
     let network = parser.parse(&*input).unwrap();
-    // dbg!(&network);
+
+    let mut reverse = network
+        .iter()
+        .fold(HashMap::new(), |mut acc, (&id, edges)| {
+            acc.entry(id).or_insert(HashSet::new());
+            for &x in edges.iter() {
+                acc.entry(x).or_insert(HashSet::new()).insert(id);
+            }
+            acc
+        });
+
+    let topo_sort = {
+        iter::from_fn(|| {
+            if reverse.is_empty() {
+                return None;
+            };
+            let mut id = "out";
+            let pred = loop {
+                let in_edges = reverse
+                    .get(id)
+                    .expect("every node must be present in the reverse map.");
+                match in_edges.iter().next() {
+                    None => break id,
+                    Some(pred) => id = pred,
+                }
+            };
+            reverse.remove(pred);
+            for &x in network.get(pred).unwrap_or(&HashSet::new()) {
+                assert!(reverse.get_mut(x).unwrap().remove(pred));
+            }
+            Some(pred)
+        })
+    };
 
     let mut paths = 0;
 
     let mut packets = HashMap::from([("you", 1)]);
     // dbg_inline!(&packets);
-    let mut queue = VecDeque::from(["you"]);
-    while let Some(x) = queue.pop_front() {
-        let n_packets = packets.remove(x).unwrap_or(0);
+    for x in topo_sort {
+        let n_packets = match packets.remove(x) {
+            None => continue,
+            Some(x) => x,
+        };
         if x == "out" {
             paths += n_packets;
-        } else if n_packets > 0 {
+        } else {
             for &next in &network[x] {
                 *packets.entry(next).or_default() += n_packets;
-                queue.push_back(next);
             }
         }
         // dbg_inline!(&packets);
