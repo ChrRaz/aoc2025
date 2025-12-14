@@ -55,21 +55,41 @@ fn main() {
         .collect()
     };
 
-    let paths = simulate_network(&network, HashMap::from([("you", 1)]), "out", &topo_sort);
-    println!("Part 1: {paths}");
+    println!(
+        "Part 1: {:?}",
+        number_of_paths_through(&network, HashSet::from(["you", "out"]), &topo_sort)
+    );
 
-    let (first, second) = topo_sort
+    println!(
+        "Part 2: {:?}",
+        number_of_paths_through(
+            &network,
+            HashSet::from(["svr", "dac", "fft", "out"]),
+            &topo_sort
+        )
+    );
+}
+
+/// Finds the number of paths that pass through all the given nodes in some order or returns the set of nodes that are not in the graph.
+fn number_of_paths_through<'a>(
+    network: &HashMap<&str, HashSet<&'a str>>,
+    mut nodes: HashSet<&'a str>,
+    topo_sort: &[&'a str],
+) -> Result<u64, HashSet<&'a str>> {
+    let sorted_nodes = topo_sort
         .iter()
-        .find_map(|&id| match id {
-            "dac" => Some(("dac", "fft")),
-            "fft" => Some(("fft", "dac")),
-            _ => None,
-        })
-        .unwrap();
-    let paths = simulate_network(&network, HashMap::from([("svr", 1)]), first, &topo_sort);
-    let paths = simulate_network(&network, HashMap::from([(first, paths)]), second, &topo_sort);
-    let paths = simulate_network(&network, HashMap::from([(second, paths)]), "out", &topo_sort);
-    println!("Part 2: {paths}");
+        .filter(|&id| nodes.remove(id))
+        .copied()
+        .collect::<Vec<_>>();
+    if !nodes.is_empty() {
+        return Err(nodes);
+    }
+    Ok(sorted_nodes
+        .windows(2)
+        .map(|w| (w[0], w[1]))
+        .fold(1, |paths, (from, to)| {
+            simulate_network(&network, HashMap::from([(from, paths)]), to, &topo_sort)
+        }))
 }
 
 fn simulate_network<'a>(
