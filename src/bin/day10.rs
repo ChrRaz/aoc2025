@@ -46,7 +46,7 @@ fn main() {
 
     let manual = parser.parse(&*input).unwrap();
 
-    let mut sum = 0;
+    let mut part1_sum = 0;
     let mut all_the_masks = vec![];
 
     for Entry {
@@ -55,48 +55,50 @@ fn main() {
         _jolts,
     } in manual
     {
-        let nrows = target_lights.len();
-        let ncols = switchboard.len();
-        all_the_masks.extend(all_the_masks.len()..(1 << ncols));
-        all_the_masks.sort_by_key(|x| x.count_ones());
-        let vec: Vec<Vec<_>> = switchboard
-            .into_iter()
-            .map(|r| {
-                r.into_iter()
-                    .scan(-1, |prev, x| {
-                        let res = x.strict_sub_signed(*prev) - 1;
-                        *prev = x.cast_signed();
-                        Some(res)
-                    })
-                    .flat_map(|x| iter::repeat_n(false, x).chain(iter::once(true)))
-                    .pad_end(nrows, false)
-                    .collect()
-            })
-            .collect();
-        // dbg_inline!(&vec);
+        part1_sum += {
+            let nrows = target_lights.len();
+            let ncols = switchboard.len();
+            all_the_masks.extend(all_the_masks.len()..(1 << ncols));
+            all_the_masks.sort_by_key(|x| x.count_ones());
+            let vec: Vec<Vec<_>> = switchboard
+                .into_iter()
+                .map(|r| {
+                    r.into_iter()
+                        .scan(-1, |prev, x| {
+                            let res = x.strict_sub_signed(*prev) - 1;
+                            *prev = x.cast_signed();
+                            Some(res)
+                        })
+                        .flat_map(|x| iter::repeat_n(false, x).chain(iter::once(true)))
+                        .pad_end(nrows, false)
+                        .collect()
+                })
+                .collect();
+            // dbg_inline!(&vec);
 
-        let mask = all_the_masks
-            .iter()
-            .find(|&&mask| {
-                let vec1 = vec
-                    .iter()
-                    .enumerate()
-                    .filter(|&(i, _)| (mask & 1 << i) != 0)
-                    .map(|(_, v)| v.clone())
-                    .fold(target_lights.clone(), |mut acc, v| {
-                        acc.iter_mut().zip(v).for_each(|(a, b)| {
-                            *a ^= b;
+            let mask = all_the_masks
+                .iter()
+                .find(|&&mask| {
+                    let vec1 = vec
+                        .iter()
+                        .enumerate()
+                        .filter(|&(i, _)| (mask & 1 << i) != 0)
+                        .map(|(_, v)| v.clone())
+                        .fold(target_lights.clone(), |mut acc, v| {
+                            acc.iter_mut().zip(v).for_each(|(a, b)| {
+                                *a ^= b;
+                            });
+                            acc
                         });
-                        acc
-                    });
-                !vec1.into_iter().any(identity)
-            })
-            .expect("some combination of buttons must work");
-        // dbg_inline!("{:b}": mask);
-        sum += mask.count_ones();
+                    !vec1.into_iter().any(identity)
+                })
+                .expect("some combination of buttons must work");
+            // dbg_inline!("{:b}": mask);
+            mask.count_ones()
+        };
     }
 
-    println!("Part 1: {sum}");
+    println!("Part 1: {part1_sum}");
 }
 
 #[derive(Debug)]
