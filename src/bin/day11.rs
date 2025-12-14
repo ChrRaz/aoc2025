@@ -78,8 +78,8 @@ fn number_of_paths_through<'a>(
 ) -> Result<u64, HashSet<&'a str>> {
     let sorted_nodes = topo_sort
         .iter()
-        .filter(|&id| nodes.remove(id))
-        .copied()
+        .enumerate()
+        .filter_map(|(i, &id)| nodes.remove(id).then_some((i, id)))
         .collect::<Vec<_>>();
     if !nodes.is_empty() {
         return Err(nodes);
@@ -88,7 +88,12 @@ fn number_of_paths_through<'a>(
         .windows(2)
         .map(|w| (w[0], w[1]))
         .fold(1, |paths, (from, to)| {
-            simulate_network(&network, HashMap::from([(from, paths)]), to, &topo_sort)
+            simulate_network(
+                network,
+                HashMap::from([(from.1, paths)]),
+                to.1,
+                &topo_sort[from.0..=to.0],
+            )
         }))
 }
 
