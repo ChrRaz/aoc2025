@@ -1,8 +1,7 @@
 use chumsky::container::Container;
 use std::fmt::{Debug, Formatter};
 use std::ops::BitXor;
-use std::path::Path;
-use std::{fs, io, mem};
+use std::{env, fs, io, mem};
 
 pub mod iter;
 
@@ -32,6 +31,13 @@ macro_rules! dbg_inline {
     ($($val:expr),+ $(,)?) => {
         ($($crate::dbg_inline!("{:?}":$val)),+,)
     };
+}
+
+pub fn read_file_or_stdin() -> String {
+    match env::args().nth(1) {
+        None => io::read_to_string(io::stdin()).unwrap(),
+        Some(path) => fs::read_to_string(path).unwrap(),
+    }
 }
 
 pub fn sort_two<T: Ord>(a: &mut T, b: &mut T) {
