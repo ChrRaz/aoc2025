@@ -1,12 +1,8 @@
+use aoc25::BitMask;
 use aoc25::iter::IterExt;
-use aoc25::{BitMask, dbg_inline};
 use chumsky::prelude::*;
 use chumsky::text::{inline_whitespace, int, newline};
-use std::cmp::{Ordering, Reverse};
-use std::collections::BinaryHeap;
-use std::fmt::{Debug, Formatter};
-use std::ops::ControlFlow;
-use std::ops::ControlFlow::{Break, Continue};
+use std::cmp::Reverse;
 use std::{io, iter};
 
 fn main() {
@@ -105,18 +101,28 @@ fn main() {
                 current: &mut [u32],
                 switchboard: &[Vec<usize>],
                 presses: u32,
-            ) -> ControlFlow<u32> {
+                best_so_far: &mut u32,
+            ) {
+                // Prune by a lower bound on any solution found here.
+                // TODO: The lower bound can probably be improved by looking at more elements.
+                //  One idea would be to look at "islands" of joltage counters.
+                //  Take the max value here, look at which buttons affect it and look at all counters not affected by those buttons.
+                //  Continue this until no counters remain. That should still be a lower bound and it dominates this one.
+                if presses + *current.iter().max().unwrap() >= *best_so_far {
+                    return;
+                }
+
                 if current.iter().all(|&x| x == 0) {
-                    return Break(presses);
+                    *best_so_far = presses;
                 }
 
                 let Some((button, rest)) = switchboard.split_first() else {
-                    return Continue(());
+                    return;
                 };
 
                 if button.iter().all(|&i| current[i] > 0) {
                     button.iter().for_each(|&i| current[i] -= 1);
-                    dfs(current, switchboard, presses + 1)?;
+                    dfs(current, switchboard, presses + 1, best_so_far);
                     button.iter().for_each(|&i| current[i] += 1);
                 }
 
@@ -126,46 +132,14 @@ fn main() {
                     // This joltage rating is already satisfied, or we still have a button that can fix it.
                     .all(|(i, n)| *n == 0 || rest.iter().flatten().any(|x| i == *x))
                 {
-                    dfs(current, rest, presses)?;
+                    dfs(current, rest, presses, best_so_far);
                 }
-                Continue(())
             }
 
-            let upper_bound = dfs(&mut jolts.clone(), &switchboard, 0)
-                .break_value()
-                .expect("must have a valid solution.");
-
-            dbg!(&upper_bound);
-
-            // Let's try pathfinding.
-            let mut nodes = BinaryHeap::from([Reverse(Node::new(&switchboard, &jolts))]);
-            let mut lower_bound = 0;
-
-            (|| {
-                let mut nodes_searched = 0usize;
-                while let Some(Reverse(node)) = nodes.pop() {
-                    // dbg_inline!(&node);
-                    nodes_searched += 1;
-                    if node.score() > lower_bound {
-                        lower_bound = node.score();
-                        eprintln!(
-                            "Lower bound is now {lower_bound}. {} nodes to go.",
-                            nodes.len()
-                        )
-                    }
-                    if node.done() {
-                        dbg_inline!(nodes_searched, &node);
-                        return node.presses();
-                    } else {
-                        nodes.extend(
-                            node.children()
-                                .filter(|c| c.score() <= upper_bound)
-                                .map(Reverse),
-                        );
-                    }
-                }
-                unreachable!("there must be a valid solution.")
-            })()
+            let mut sol = u32::MAX;
+            dfs(&mut jolts.clone(), &switchboard, 0, &mut sol);
+            assert_ne!(sol, u32::MAX);
+            dbg!(sol)
         };
     }
 
@@ -187,118 +161,5 @@ impl Entry {
             switchboard,
             jolts,
         }
-    }
-}
-
-struct Node<'a> {
-    presses: u32,
-    current: Vec<u32>,
-    goal: &'a [u32],
-    switchboard: &'a [Vec<usize>],
-}
-
-impl<'a> Debug for Node<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Node")
-            .field("current", &self.current)
-            .field("score", &self.score())
-            .field("presses", &self.presses())
-            // .field("estimate", &self.estimate_remaining())
-            // .field("history", &self.history)
-            .finish()
-    }
-}
-
-impl Eq for Node<'_> {}
-
-impl PartialEq<Self> for Node<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
-    }
-}
-
-impl PartialOrd<Self> for Node<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Node<'_> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        Ord::cmp(&self.score(), &other.score())
-            .then_with(|| {
-                Ord::cmp(
-                    &other.current.iter().sum::<u32>(),
-                    &self.current.iter().sum::<u32>(),
-                )
-            })
-            .then_with(|| Ord::cmp(&self.current, &other.current)) // Need a tie-breaker for `Eq`
-    }
-}
-
-impl<'a> Node<'a> {
-    pub fn new(switchboard: &'a [Vec<usize>], goal: &'a [u32]) -> Self {
-        Node {
-            presses: 0,
-            current: vec![0; goal.len()],
-            goal,
-            switchboard,
-        }
-    }
-}
-
-impl Node<'_> {
-    pub fn estimate_remaining(&self) -> u32 {
-        self.current
-            .iter()
-            .zip(self.goal.iter())
-            .map(|(c, g)| g - c)
-            .max()
-            .unwrap()
-    }
-
-    pub fn presses(&self) -> u32 {
-        self.presses
-    }
-
-    pub fn score(&self) -> u32 {
-        self.presses() + self.estimate_remaining()
-    }
-
-    pub fn done(&self) -> bool {
-        self.current == self.goal
-    }
-
-    pub fn children(self) -> impl Iterator<Item = Self> {
-        iter::successors(
-            // Only produce children if we have buttons left to push.
-            // Otherwise, produce one child for every time we can press the first button and discard it.
-            self.switchboard.first().map(|_| (0, self.current)),
-            |(presses, prev)| {
-                let button = &self.switchboard[0];
-                if button.iter().any(|&i| prev[i] >= self.goal[i]) {
-                    return None;
-                }
-                let mut next = prev.clone();
-                for &i in button.iter() {
-                    next[i] += 1;
-                }
-                Some((presses + 1, next))
-            },
-        )
-        .filter(|(_, next)| {
-            next.iter()
-                .enumerate()
-                // This joltage rating is already satisfied, or we still have a button that can fix it.
-                .all(|(i, n)| {
-                    *n == self.goal[i] || self.switchboard.iter().flatten().any(|x| i == *x)
-                })
-        })
-        .map(move |(presses, next)| Node {
-            presses: self.presses + presses,
-            current: next,
-            goal: self.goal,
-            switchboard: &self.switchboard[1..],
-        })
     }
 }
