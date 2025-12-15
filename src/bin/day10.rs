@@ -1,10 +1,12 @@
 use aoc25::iter::IterExt;
-use aoc25::{dbg_inline, BitMask};
+use aoc25::{BitMask, dbg_inline};
 use chumsky::prelude::*;
 use chumsky::text::{inline_whitespace, int, newline};
 use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
 use std::fmt::{Debug, Formatter};
+use std::ops::ControlFlow;
+use std::ops::ControlFlow::{Break, Continue};
 use std::{io, iter};
 
 fn main() {
@@ -98,6 +100,43 @@ fn main() {
         part2_sum += {
             switchboard.sort_by_key(|v| Reverse(v.len()));
 
+            // Generate a valid solution as an upper bound.
+            fn dfs(
+                current: &mut [u32],
+                switchboard: &[Vec<usize>],
+                presses: u32,
+            ) -> ControlFlow<u32> {
+                if current.iter().all(|&x| x == 0) {
+                    return Break(presses);
+                }
+
+                let Some((button, rest)) = switchboard.split_first() else {
+                    return Continue(());
+                };
+
+                if button.iter().all(|&i| current[i] > 0) {
+                    button.iter().for_each(|&i| current[i] -= 1);
+                    dfs(current, switchboard, presses + 1)?;
+                    button.iter().for_each(|&i| current[i] += 1);
+                }
+
+                if current
+                    .iter()
+                    .enumerate()
+                    // This joltage rating is already satisfied, or we still have a button that can fix it.
+                    .all(|(i, n)| *n == 0 || rest.iter().flatten().any(|x| i == *x))
+                {
+                    dfs(current, rest, presses)?;
+                }
+                Continue(())
+            }
+
+            let upper_bound = dfs(&mut jolts.clone(), &switchboard, 0)
+                .break_value()
+                .expect("must have a valid solution.");
+
+            dbg!(&upper_bound);
+
             // Let's try pathfinding.
             let mut nodes = BinaryHeap::from([Reverse(Node::new(&switchboard, &jolts))]);
             let mut lower_bound = 0;
@@ -120,7 +159,7 @@ fn main() {
                     } else {
                         nodes.extend(
                             node.children()
-                                // .filter(|c| c.score() <= upper_bound)
+                                .filter(|c| c.score() <= upper_bound)
                                 .map(Reverse),
                         );
                     }
