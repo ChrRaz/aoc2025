@@ -1,9 +1,9 @@
-use aoc25::BitMask;
 use aoc25::iter::IterExt;
+use aoc25::{dbg_inline, BitMask};
 use chumsky::prelude::*;
 use chumsky::text::{inline_whitespace, int, newline};
-use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use std::cmp::{Ordering, Reverse};
+use std::collections::BinaryHeap;
 use std::fmt::{Debug, Formatter};
 use std::{io, iter};
 
@@ -55,7 +55,7 @@ fn main() {
 
     for Entry {
         target_lights,
-        switchboard,
+        mut switchboard,
         jolts,
     } in manual
     {
@@ -96,64 +96,38 @@ fn main() {
         };
 
         part2_sum += {
+            switchboard.sort_by_key(|v| Reverse(v.len()));
+
             // Let's try pathfinding.
-            let mut nodes = BTreeSet::from([Node::new(&jolts)]);
+            let mut nodes = BinaryHeap::from([Reverse(Node::new(&switchboard, &jolts))]);
+            let mut lower_bound = 0;
 
             (|| {
-                while let Some(node) = nodes.pop_first() {
+                let mut nodes_searched = 0usize;
+                while let Some(Reverse(node)) = nodes.pop() {
+                    // dbg_inline!(&node);
+                    nodes_searched += 1;
+                    if node.score() > lower_bound {
+                        lower_bound = node.score();
+                        eprintln!(
+                            "Lower bound is now {lower_bound}. {} nodes to go.",
+                            nodes.len()
+                        )
+                    }
                     if node.done() {
+                        dbg_inline!(nodes_searched, &node);
                         return node.presses();
                     } else {
-                        nodes.extend(node.children(&switchboard));
+                        nodes.extend(
+                            node.children()
+                                // .filter(|c| c.score() <= upper_bound)
+                                .map(Reverse),
+                        );
                     }
                 }
                 unreachable!("there must be a valid solution.")
             })()
         };
-
-        // part2_sum += {
-        //     fn part2_inner(
-        //         current: &mut [u32],
-        //         switchboard: &[Vec<u32>],
-        //         seen: &mut HashMap<(Cow<[u32]>, usize), Option<u32>>,
-        //     ) -> Option<u32> {
-        //         if let Some(sol) = seen.get(&(Cow::Borrowed(current), switchboard.len())) {
-        //             return *sol;
-        //         }
-        //         // dbg_inline!(&current);
-        //         if current.iter().all(|x| *x == 0) {
-        //             // Solution found
-        //             // eprintln!("Solution found! {depth}");
-        //             return Some(0);
-        //         }
-        //
-        //         let (first, rest) = switchboard.split_first()?; // Are there buttons left to press?
-        //         let use_button = first
-        //             .iter()
-        //             .all(|i| current[*i as usize] > 0) // Can we press the button without overshooting?
-        //             .then(|| {
-        //                 first.iter().for_each(|i| current[*i as usize] -= 1);
-        //                 let tmp = part2_inner(current, switchboard, seen).map(|x| x + 1);
-        //                 seen.insert((Cow::Owned(current.to_vec()), switchboard.len()), tmp);
-        //                 first.iter().for_each(|i| current[*i as usize] += 1);
-        //                 tmp
-        //             })
-        //             .flatten();
-        //         let discard_button = part2_inner(current, rest, seen);
-        //         seen.insert((Cow::Owned(current.to_owned()), rest.len()), discard_button);
-        //         [use_button, discard_button]
-        //             .into_iter()
-        //             .flatten()
-        //             .min()
-        //     }
-        //
-        //     switchboard.sort_by_key(|v| cmp::Reverse(v.len()));
-        //     let mut seen = HashMap::new();
-        //     let res = part2_inner(&mut jolts.clone(), &switchboard, &mut seen)
-        //         .expect("some combination of button pushes must give the right jolts.");
-        //     // dbg!(seen);
-        //     dbg!(res)
-        // };
     }
 
     println!("Part 1: {part1_sum}");
@@ -181,7 +155,7 @@ struct Node<'a> {
     presses: u32,
     current: Vec<u32>,
     goal: &'a [u32],
-    // history: Vec<u32>,
+    switchboard: &'a [Vec<usize>],
 }
 
 impl<'a> Debug for Node<'a> {
@@ -189,7 +163,7 @@ impl<'a> Debug for Node<'a> {
         f.debug_struct("Node")
             .field("current", &self.current)
             .field("score", &self.score())
-            // .field("presses", &self.presses())
+            .field("presses", &self.presses())
             // .field("estimate", &self.estimate_remaining())
             // .field("history", &self.history)
             .finish()
@@ -212,19 +186,24 @@ impl PartialOrd<Self> for Node<'_> {
 
 impl Ord for Node<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.score()
-            .cmp(&other.score())
-            .then_with(|| self.current.cmp(&other.current))
+        Ord::cmp(&self.score(), &other.score())
+            .then_with(|| {
+                Ord::cmp(
+                    &other.current.iter().sum::<u32>(),
+                    &self.current.iter().sum::<u32>(),
+                )
+            })
+            .then_with(|| Ord::cmp(&self.current, &other.current)) // Need a tie-breaker for `Eq`
     }
 }
 
 impl<'a> Node<'a> {
-    pub fn new(goal: &'a [u32]) -> Self {
+    pub fn new(switchboard: &'a [Vec<usize>], goal: &'a [u32]) -> Self {
         Node {
             presses: 0,
             current: vec![0; goal.len()],
             goal,
-            // history: vec![],
+            switchboard,
         }
     }
 }
@@ -251,30 +230,36 @@ impl Node<'_> {
         self.current == self.goal
     }
 
-    pub fn children<T: AsRef<[usize]>>(&self, switchboard: &[T]) -> impl Iterator<Item = Self> {
-        switchboard
-            .iter()
-            .enumerate()
-            .filter_map(move |(i, button)| {
-                let button = button.as_ref();
-                button
-                    .iter()
-                    .all(|i| self.current[*i] < self.goal[*i])
-                    .then_some((i, button))
-            })
-            .map(|(_, button)| {
-                let mut next = self.current.clone();
-                for &i in button {
+    pub fn children(self) -> impl Iterator<Item = Self> {
+        iter::successors(
+            // Only produce children if we have buttons left to push.
+            // Otherwise, produce one child for every time we can press the first button and discard it.
+            self.switchboard.first().map(|_| (0, self.current)),
+            |(presses, prev)| {
+                let button = &self.switchboard[0];
+                if button.iter().any(|&i| prev[i] >= self.goal[i]) {
+                    return None;
+                }
+                let mut next = prev.clone();
+                for &i in button.iter() {
                     next[i] += 1;
                 }
-                // let mut history = self.history.clone();
-                // history.push(i as u32);
-                Node {
-                    presses: self.presses + 1,
-                    current: next,
-                    goal: self.goal,
-                    // history,
-                }
-            })
+                Some((presses + 1, next))
+            },
+        )
+        .filter(|(_, next)| {
+            next.iter()
+                .enumerate()
+                // This joltage rating is already satisfied, or we still have a button that can fix it.
+                .all(|(i, n)| {
+                    *n == self.goal[i] || self.switchboard.iter().flatten().any(|x| i == *x)
+                })
+        })
+        .map(move |(presses, next)| Node {
+            presses: self.presses + presses,
+            current: next,
+            goal: self.goal,
+            switchboard: &self.switchboard[1..],
+        })
     }
 }
