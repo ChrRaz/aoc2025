@@ -4,8 +4,10 @@ use chumsky::prelude::*;
 use chumsky::text::{inline_whitespace, int, newline};
 use rayon::prelude::*;
 use std::cmp::Reverse;
+use std::fmt::Debug;
+use std::iter::Sum;
+use std::ops::Add;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::{io, iter};
 
 fn main() {
@@ -50,18 +52,17 @@ fn main() {
 
     let manual = parser.parse(&*input).unwrap();
 
-    let part1_sum = AtomicU32::new(0);
-    let part2_sum = AtomicU32::new(0);
     let all_the_masks = RwLock::new(vec![]);
 
-    manual.into_par_iter().for_each(
-        |Entry {
-             target_lights,
-             mut switchboard,
-             jolts,
-         }| {
-            part1_sum.fetch_add(
-                {
+    let TwoNumbers(part1_sum, part2_sum) = manual
+        .into_par_iter()
+        .map(
+            |Entry {
+                 target_lights,
+                 mut switchboard,
+                 jolts,
+             }| {
+                let part1 = {
                     let nrows = target_lights.len();
                     let ncols = switchboard.len();
                     if (1 << ncols) > all_the_masks.read().unwrap().len() {
@@ -101,12 +102,9 @@ fn main() {
                         .expect("some combination of buttons must work");
                     // dbg_inline!("{:b}": mask);
                     mask.count_ones()
-                },
-                Ordering::Relaxed,
-            );
+                };
 
-            part2_sum.fetch_add(
-                {
+                let part2 = {
                     switchboard.sort_by_key(|v| Reverse(v.len()));
 
                     // Generate a valid solution as an upper bound.
@@ -153,14 +151,14 @@ fn main() {
                     dfs(&mut jolts.clone(), &switchboard, 0, &mut sol);
                     assert_ne!(sol, u32::MAX);
                     dbg!(sol)
-                },
-                Ordering::Relaxed,
-            );
-        },
-    );
+                };
+                TwoNumbers(part1, part2)
+            },
+        )
+        .sum();
 
-    println!("Part 1: {}", part1_sum.load(Ordering::Relaxed));
-    println!("Part 2: {}", part2_sum.load(Ordering::Relaxed));
+    println!("Part 1: {part1_sum}");
+    println!("Part 2: {part2_sum}");
 }
 
 #[derive(Debug)]
@@ -177,5 +175,26 @@ impl Entry {
             switchboard,
             jolts,
         }
+    }
+}
+
+#[derive(Default, Debug, Eq, PartialEq)]
+struct TwoNumbers<T, U>(T, U);
+
+impl<T, U> Sum for TwoNumbers<T, U>
+where
+    T: Add<Output = T> + Default,
+    U: Add<Output = U> + Default,
+{
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Default::default(), |a, b| a + b)
+    }
+}
+
+impl<T: Add, U: Add> Add for TwoNumbers<T, U> {
+    type Output = TwoNumbers<T::Output, U::Output>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        TwoNumbers(self.0 + rhs.0, self.1 + rhs.1)
     }
 }
