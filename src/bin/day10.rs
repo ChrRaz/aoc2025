@@ -1,9 +1,10 @@
-use aoc25::BitMask;
 use aoc25::iter::IterExt;
+use aoc25::{BitMask, dbg_inline};
 use chumsky::prelude::*;
 use chumsky::text::{inline_whitespace, int, newline};
-use std::cmp::Reverse;
 use std::{io, iter};
+use z3::SatResult;
+use z3::ast::Int;
 
 fn main() {
     let input = io::read_to_string(io::stdin()).unwrap();
@@ -53,7 +54,7 @@ fn main() {
 
     for Entry {
         target_lights,
-        mut switchboard,
+        switchboard,
         jolts,
     } in manual
     {
@@ -94,52 +95,49 @@ fn main() {
         };
 
         part2_sum += {
-            switchboard.sort_by_key(|v| Reverse(v.len()));
+            let vec: Vec<Vec<bool>> = switchboard
+                .iter()
+                .map(|r| {
+                    r.iter()
+                        .scan(-1, |prev, x| {
+                            let res = x.strict_sub_signed(*prev) - 1;
+                            *prev = x.cast_signed();
+                            Some(res)
+                        })
+                        .flat_map(|x| iter::repeat_n(false, x).chain(iter::once(true)))
+                        .pad_end(jolts.len().try_into().unwrap(), false)
+                        .collect()
+                })
+                .collect();
 
-            // Generate a valid solution as an upper bound.
-            fn dfs(
-                current: &mut [u32],
-                switchboard: &[Vec<usize>],
-                presses: u32,
-                best_so_far: &mut u32,
-            ) {
-                // Prune by a lower bound on any solution found here.
-                // TODO: The lower bound can probably be improved by looking at more elements.
-                //  One idea would be to look at "islands" of joltage counters.
-                //  Take the max value here, look at which buttons affect it and look at all counters not affected by those buttons.
-                //  Continue this until no counters remain. That should still be a lower bound and it dominates this one.
-                if presses + *current.iter().max().unwrap() >= *best_so_far {
-                    return;
-                }
-
-                if current.iter().all(|&x| x == 0) {
-                    *best_so_far = presses;
-                }
-
-                let Some((button, rest)) = switchboard.split_first() else {
-                    return;
-                };
-
-                if button.iter().all(|&i| current[i] > 0) {
-                    button.iter().for_each(|&i| current[i] -= 1);
-                    dfs(current, switchboard, presses + 1, best_so_far);
-                    button.iter().for_each(|&i| current[i] += 1);
-                }
-
-                if current
+            let solver = z3::Optimize::new();
+            let presses: Vec<_> = switchboard
+                .iter()
+                // .map(|button| Int::new_const(format!("{button:?}")))
+                .enumerate()
+                .map(|(i, _)| Int::new_const(i as u32))
+                .collect();
+            for v in &presses {
+                solver.assert(&v.ge(0));
+            }
+            for (i, rhs) in jolts.into_iter().enumerate() {
+                let lhs: Int = presses
                     .iter()
                     .enumerate()
-                    // This joltage rating is already satisfied, or we still have a button that can fix it.
-                    .all(|(i, n)| *n == 0 || rest.iter().flatten().any(|x| i == *x))
-                {
-                    dfs(current, rest, presses, best_so_far);
-                }
+                    .filter_map(|(j, v)| vec[j][i].then_some(v))
+                    .sum();
+                let constraint = lhs.eq(rhs);
+                eprintln!("{constraint}");
+                solver.assert(&constraint);
             }
-
-            let mut sol = u32::MAX;
-            dfs(&mut jolts.clone(), &switchboard, 0, &mut sol);
-            assert_ne!(sol, u32::MAX);
-            dbg!(sol)
+            let sum: Int = presses.iter().sum();
+            solver.minimize(&sum);
+            assert_eq!(solver.check(&[]), SatResult::Sat);
+            let model = dbg!(solver.get_model()).unwrap();
+            dbg_inline!(model.eval(&sum, true))
+                .unwrap()
+                .as_u64()
+                .unwrap()
         };
     }
 

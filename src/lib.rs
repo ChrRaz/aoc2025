@@ -30,7 +30,7 @@ macro_rules! dbg_inline {
         ($($crate::dbg_inline!($fmt:$val)),+,)
     };
     ($($val:expr),+ $(,)?) => {
-        ($($crate::dbg_inline!("{:?}":$val)),+,)
+        ($($crate::dbg_inline!("{:?}":$val)),+)
     };
 }
 
