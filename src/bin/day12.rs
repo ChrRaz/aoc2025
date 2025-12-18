@@ -6,17 +6,11 @@ use chumsky::Boxed;
 use chumsky::prelude::*;
 use chumsky::text::{inline_whitespace, int, newline};
 use std::collections::{BTreeMap, HashSet};
-use z3::ast::{Ast, BV, Bool, Int, atmost};
+use z3::ast::{Ast, BV, Bool, Int, atleast, atmost};
 use z3::{SatResult, Solver, Tactic};
 
 fn main() {
     let input = read_file_or_stdin();
-
-    z3::set_global_param("verbose", "1");
-
-    // let mut tactics: Vec<_> = z3::Tactic::list_all().into_iter().map(Result::unwrap).collect();
-    // tactics.sort();
-    // dbg!(tactics);
 
     let parser: Boxed<_, _, extra::Err<Rich<_>>> = {
         let number = int(10).from_str::<u32>().unwrapped();
@@ -105,7 +99,15 @@ fn main() {
 
         let occupied: Vec<_> = (0..region.size.0)
             .cartesian_product(0..region.size.1)
-            .map(|(x, y)| Int::new_const(format!("oc:{x},{y}")))
+            .map(|(x, y)| {
+                // The tile at location x,y is tile #i in a present.
+                let vec: Vec<_> = (0..9)
+                    .map(|i| Bool::new_const(format!("oc:{x},{y}:{i}")))
+                    .collect();
+                // A tile can only be part of one present.
+                solver.assert(atmost(&vec, 1));
+                vec
+            })
             .collect();
 
         let oc_grid: Vec<_> = occupied.chunks(region.size.1 as usize).collect();
@@ -149,9 +151,10 @@ fn main() {
                         .map(|((di, dj), x)| {
                             let ii = (i + di) as usize;
                             let jj = (j + dj) as usize;
+                            let n = (di * 3 + dj) as usize;
                             match x {
-                                '#' => oc_grid[ii][jj].eq(i * (region.size.0) + j),
-                                '.' => oc_grid[ii][jj].ne(i * (region.size.0) + j),
+                                '#' => oc_grid[ii][jj][n].clone(),
+                                '.' => oc_grid[ii][jj][n].not(),
                                 _ => unreachable!(),
                             }
                         })
@@ -178,10 +181,8 @@ fn main() {
             .zip(region.counts.iter())
             .enumerate()
         {
-            solver.assert(Bool::pb_eq(
-                &x.iter().map(|&x| (x, 1)).collect::<Vec<_>>(),
-                count.cast_signed(),
-            ))
+            solver.assert(atmost(x.clone(), *count));
+            solver.assert(atleast(x, *count));
         }
 
         match dbg!(solver.check()) {
@@ -189,37 +190,60 @@ fn main() {
                 dbg!(solver.get_unsat_core());
             }
             SatResult::Unknown => {
-                panic!("unable to reach a conclusion.")
+                eprintln!(
+                    "unable to reach a conclusion: {:?}",
+                    solver.get_reason_unknown()
+                );
             }
             SatResult::Sat => {
                 part1_sum += 1;
+                let model = &solver.get_model().unwrap();
+
+                for (i, x) in top_left_of_present
+                    .chunks((area_of_region) as usize)
+                    .enumerate()
+                {
+                    println!(
+                        "{:2} presents of type {} ({})",
+                        x.iter()
+                            .filter(|&x| model.eval(x, true).unwrap().as_bool().unwrap())
+                            .count(),
+                        i,
+                        all_orientations[i].id,
+                    );
+                }
+
+                let presents = tl_grid.iter().enumerate().flat_map(|(p, grid)| {
+                    grid.iter().enumerate().flat_map(move |(x, b)| {
+                        b.iter().enumerate().flat_map(move |(y, b)| {
+                            model
+                                .eval(b, true)
+                                .unwrap()
+                                .as_bool()
+                                .unwrap()
+                                .then_some((x, y, p))
+                        })
+                    })
+                });
+                let mut chars = vec![' '; (area_of_region) as usize];
+                for (i, (x, y, p)) in presents.enumerate() {
+                    // dbg!((x, y, p));
+                    let digit = char::from_digit((i % 36) as u32, 36).unwrap();
+                    for ((dx, dy), c) in (0..3)
+                        .cartesian_product(0..3)
+                        .zip(all_orientations[p].shape.chars())
+                    {
+                        if c == '#' {
+                            assert_eq!(chars[(x + dx) * region.size.1 as usize + (y + dy)], ' ');
+                            chars[(x + dx) * region.size.1 as usize + (y + dy)] = digit;
+                        }
+                    }
+                }
+                chars
+                    .chunks(region.size.1 as usize)
+                    .for_each(|row| println!("{}", row.iter().collect::<String>()));
             }
         }
-
-        // let model = solver.get_model().unwrap();
-        // dbg!(
-        //     model
-        //         .get_const_interp(&top_left_of_present[0])
-        //         .unwrap()
-        //         .as_bool()
-        //         .unwrap()
-        // );
-        //
-        // dbg!(
-        //     top_left_of_present
-        //         .iter()
-        //         .filter(|&x| model.get_const_interp(x).unwrap().as_bool().unwrap())
-        //         .collect::<Vec<_>>()
-        // );
-        //
-        // let lol: Vec<_> = occupied
-        //     .iter()
-        //     .map(|x| model.get_const_interp(x).unwrap().as_u64().unwrap())
-        //     .collect();
-        // let lol: Vec<_> = lol.chunks(region.size.0 as usize).collect();
-        // for x in lol {
-        //     println!("{x:?}");
-        // }
     }
 
     println!("Part 1: {part1_sum}");
