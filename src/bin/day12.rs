@@ -60,7 +60,7 @@ fn main() {
     dbg!(number_of_presents);
 
     let all_orientations: Vec<_> = presents
-        .into_iter()
+        .iter()
         .flat_map(|p| p.orbit().into_iter().collect::<HashSet<_>>())
         .collect();
 
@@ -78,6 +78,18 @@ fn main() {
 
     for region in regions {
         dbg_inline!(&region);
+
+        let area_of_presents: u32 = region
+            .counts
+            .iter()
+            .zip(&presents)
+            .map(|(count, present)| count * present.area() as u32)
+            .sum();
+        let area_of_region = region.size.0 * region.size.1;
+        if area_of_presents > area_of_region {
+            println!("Region is too small ({area_of_region}) for presents ({area_of_presents})");
+            continue;
+        }
 
         // let solver = Solver::new();
         let solver = Tactic::new("simplify")
@@ -255,6 +267,10 @@ impl Present {
         let rr = r.rot_90();
         let rrr = rr.rot_90();
         [id.flip(), r.flip(), rr.flip(), rrr.flip(), id, r, rr, rrr]
+    }
+
+    pub fn area(&self) -> usize {
+        self.shape.chars().filter(|&c| c == '#').count()
     }
 }
 
