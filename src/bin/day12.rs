@@ -239,9 +239,12 @@ fn main() {
                         }
                     }
                 }
+                // He so happy :->
+                println!("+{:->w$}+", "", w = region.size.1 as usize);
                 chars
                     .chunks(region.size.1 as usize)
-                    .for_each(|row| println!("{}", row.iter().collect::<String>()));
+                    .for_each(|row| println!("|{}|", row.iter().collect::<String>()));
+                println!("+{:->w$}+", "", w = region.size.1 as usize);
             }
         }
     }
